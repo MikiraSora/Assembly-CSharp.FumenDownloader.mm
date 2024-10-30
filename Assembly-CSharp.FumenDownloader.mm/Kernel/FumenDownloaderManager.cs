@@ -17,9 +17,6 @@ namespace DpPatches.FumenDownloader.Kernel
         private volatile bool isInitalizing = false;
         private Dictionary<int, CacheFumenInfo> localCacheMap = new();
 
-        public const string APIBase = "http://nageki-net.com/fumen/";
-        public const string _APIBase = "http://fumen.naominet.live/";
-
         public FumenDownloaderManager()
         {
             cacheFilePath = Path.Combine(Setting.DataFolder, "fileCacheList.json");
@@ -80,7 +77,7 @@ namespace DpPatches.FumenDownloader.Kernel
         public void UpdateOrDownloadFumen()
         {
             //对比缓存数据, 更新或者下载谱面数据
-            if (!SimpleHttp.GetString(APIBase + "fileCache/list", out var json))
+            if (!SimpleHttp.GetString(Setting.APIUriBase + "fileCache/list", out var json))
             {
                 PatchLog.WriteLine($"Can't fetch fumen file cache list.");
                 return;
@@ -318,7 +315,7 @@ namespace DpPatches.FumenDownloader.Kernel
 
         private string GetRemoteUrl(string relativeUrl)
         {
-            return APIBase + "files/" + relativeUrl;
+            return Setting.APIUriBase + "files/" + relativeUrl;
         }
 
         public void SaveDownloadCacheData(CacheFileInfoListResponse remoteResp)

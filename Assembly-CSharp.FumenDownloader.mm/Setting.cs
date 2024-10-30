@@ -14,6 +14,7 @@ namespace DpPatches.FumenDownloader
 
         public static bool Enable { set; get; }
         public static string DataFolder { set; get; }
+        public static string APIUriBase { set; get; }
 
         public static void Init()
         {
@@ -21,11 +22,16 @@ namespace DpPatches.FumenDownloader
             {
                 DataFolder = Path.GetFullPath(iniFile.getValue(Section, "DataFolder", "dpFumenData"));
                 Enable = iniFile.getValue(Section, "Enable", true);
+                APIUriBase = iniFile.getValue(Section, "APIUriBase", "http://nageki-net.com/fumen/");
             }
 
+            if (!APIUriBase.EndsWith("/"))
+                APIUriBase += "/";
+
             PatchLog.WriteLine($"---------DpPatches.FumenDownloader.Setting------------");
-            PatchLog.WriteLine($"DataFolder = {DataFolder}");
             PatchLog.WriteLine($"Enable = {Enable}");
+            PatchLog.WriteLine($"DataFolder = {DataFolder}");
+            PatchLog.WriteLine($"APIUriBase = {APIUriBase}");
             PatchLog.WriteLine($"--------------------------------------");
         }
     }
