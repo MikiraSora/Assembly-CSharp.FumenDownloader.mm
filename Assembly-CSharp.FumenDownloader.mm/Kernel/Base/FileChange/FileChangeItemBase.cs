@@ -10,7 +10,7 @@ namespace DpPatches.FumenDownloader.Kernel.Base.FileChange
         private static int id = 0;
         public int Id { get; } = id++;
 
-        public abstract void Exeuctue();
+        public abstract bool Exeuctue();
 
         public override string ToString()
         {

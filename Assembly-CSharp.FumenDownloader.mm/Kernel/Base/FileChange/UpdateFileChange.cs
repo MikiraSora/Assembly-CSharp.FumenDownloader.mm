@@ -11,12 +11,12 @@ namespace DpPatches.FumenDownloader.Kernel.Base.FileChange
         public string FilePath { get; set; }
         public string DownloadUrl { get; set; }
 
-        public override void Exeuctue()
+        public override bool Exeuctue()
         {
             var folderPath = Path.GetDirectoryName(FilePath);
             Directory.CreateDirectory(folderPath);
 
-            SimpleHttp.DownloadFile(DownloadUrl, FilePath);
+            return SimpleHttp.DownloadFile(DownloadUrl, FilePath);
         }
 
         public override string ToString()

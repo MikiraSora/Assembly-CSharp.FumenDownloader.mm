@@ -10,7 +10,7 @@ namespace DpPatches.FumenDownloader.Kernel.Base.FileChange
     {
         public string FilePath { get; set; }
 
-        public override void Exeuctue()
+        public override bool Exeuctue()
         {
             if (File.Exists(FilePath))
             {
@@ -20,6 +20,8 @@ namespace DpPatches.FumenDownloader.Kernel.Base.FileChange
                 if (!Directory.GetFiles(folderPath).Any())
                     Directory.Delete(folderPath);
             }
+
+            return true;
         }
 
         public override string ToString()

@@ -7,7 +7,7 @@ namespace DpPatches.FumenDownloader.Kernel.Base.FileChange
 {
     public interface IFileChangeItem
     {
-        void Exeuctue();
+        bool Exeuctue();
 
         int Id { get; }
     }

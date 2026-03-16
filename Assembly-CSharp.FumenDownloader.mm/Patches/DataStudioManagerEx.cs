@@ -1,9 +1,12 @@
 ﻿using DpPatches.FumenDownloader.Kernel;
 using MonoMod;
 using MU3.Data;
+using MU3.DataStudio;
+using MU3.DataStudio.Serialize;
 using MU3.Util;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -55,6 +58,27 @@ namespace DpPatches.FumenDownloader.Patches
             PatchLog.WriteLine($"create fumen opt folder: {optFolder}");
 
             Singleton<FumenDownloaderManager>.instance.WaitForInitalized();
+        }
+
+        public extern SortedList<int, T> orig_LoadData<T, U>(ReadOnlyCollection<string> dirs, string directoryPrefix, string filename) where T : AccessorBase where U : ISerialize, new();
+
+
+        public SortedList<int, T> LoadData<T, U>(ReadOnlyCollection<string> dirs, string directoryPrefix, string filename) where T : AccessorBase where U : ISerialize, new()
+        {
+            var result = orig_LoadData<T, U>(dirs, directoryPrefix, filename);
+
+            if (typeof(T) == typeof(MU3.DataStudio.MusicData))
+            {
+                //filter once
+                var needRemoveIds = result.Where(kv => !Singleton<FumenDownloaderManager>.instance.FilterMusicData(kv.Key, kv.Value as MU3.DataStudio.MusicData)).Select(kv => kv.Key).ToList();
+                foreach (var id in needRemoveIds)
+                {
+                    result.Remove(id);
+                    PatchLog.WriteLine($"remove music data id:{id}  by FumenDownloaderManager.FilterMusicData() return false");
+                }
+            }
+
+            return result;
         }
     }
 }

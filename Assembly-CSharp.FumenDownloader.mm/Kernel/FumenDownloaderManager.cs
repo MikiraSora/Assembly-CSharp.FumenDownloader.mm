@@ -1,5 +1,6 @@
 ﻿using DpPatches.FumenDownloader.Kernel.Base;
 using DpPatches.FumenDownloader.Kernel.Base.FileChange;
+using MU3.DataStudio;
 using MU3.Util;
 using System;
 using System.Collections.Generic;
@@ -16,6 +17,7 @@ namespace DpPatches.FumenDownloader.Kernel
         private readonly string cacheFilePath;
         private volatile bool isInitalizing = false;
         private Dictionary<int, CacheFumenInfo> localCacheMap = new();
+        private Dictionary<int, FumenSet> currentFumenSet = new();
 
         public FumenDownloaderManager()
         {
@@ -76,8 +78,10 @@ namespace DpPatches.FumenDownloader.Kernel
 
         public void UpdateOrDownloadFumen()
         {
+            var query = $"?onlyPublish=false";
+
             //对比缓存数据, 更新或者下载谱面数据
-            if (!SimpleHttp.GetString(Setting.APIUriBase + "fileCache/list", out var json))
+            if (!SimpleHttp.GetString(Setting.APIUriBase + "fileCache/list" + query, out var json))
             {
                 PatchLog.WriteLine($"Can't fetch fumen file cache list.");
                 return;
@@ -91,13 +95,16 @@ namespace DpPatches.FumenDownloader.Kernel
             }
 
             var remoteCacheList = resp.cacheFumenInfos.ToDictionary(x => x.musicId, x => x);
-            var changes = new List<IFileChangeItem>();
+            var changesMap = new Dictionary<int, List<IFileChangeItem>>();
 
             foreach (var pair in remoteCacheList)
             {
                 var musicId = pair.Key;
                 var remote = pair.Value;
 
+                var changes = new List<IFileChangeItem>();
+
+                //check if musicId is exist in local cache
                 if (!localCacheMap.TryGetValue(musicId, out var local))
                 {
                     //download entire new fumen
@@ -108,17 +115,28 @@ namespace DpPatches.FumenDownloader.Kernel
                     //exist, check every files.
                     AddFileDiff(remote, local, changes);
                 }
+
+                changesMap[remote.musicId] = changes;
+                currentFumenSet[musicId] = remote.fumenSet;
             }
 
+            var totalChanges = changesMap.Values.SelectMany(x => x).ToList();
+
             //dump changes
-            foreach (var change in changes)
+            PatchLog.WriteLine("Change List:");
+            PatchLog.WriteLine("------------");
+            foreach (var change in totalChanges)
+            {
                 PatchLog.WriteLine("\t" + change.ToString());
+                PatchLog.WriteLine("");
+            }
+            PatchLog.WriteLine("------------");
 
             //execute changes
-            ExecuteChanges(changes);
+            ExecuteChanges(totalChanges);
 
             //update assets.bytes if has changes
-            if (changes.Count > 0)
+            if (totalChanges.Count > 0)
                 UpdateAssetBytesFile();
 
             //save fumen cache file list
@@ -254,7 +272,17 @@ namespace DpPatches.FumenDownloader.Kernel
 
                 if (remoteFileMap.TryGetValue(key, out var remoteFile))
                 {
-                    if (remoteFile.LastWriteTime > localFile.LastWriteTime)
+                    var localSaveFilePath = GetLocalSaveFilePath(remote.musicId, remoteFile.relativeFilePath);
+                    if (!File.Exists(localSaveFilePath))
+                    {
+                        //local is deleted
+                        changes.Add(new DownloadFileChange()
+                        {
+                            DownloadUrl = GetRemoteUrl(remoteFile.relativeFilePath),
+                            FilePath = GetLocalSaveFilePath(remote.musicId, remoteFile.relativeFilePath)
+                        });
+                    }
+                    else if (remoteFile.LastWriteTime > localFile.LastWriteTime)
                     {
                         //local is old
                         changes.Add(new UpdateFileChange()
@@ -284,6 +312,7 @@ namespace DpPatches.FumenDownloader.Kernel
                     //there is a new file from remote
                     changes.Add(new DownloadFileChange()
                     {
+                        DownloadUrl = GetRemoteUrl(remoteFile.relativeFilePath),
                         FilePath = GetLocalSaveFilePath(remote.musicId, remoteFile.relativeFilePath)
                     });
                 }
@@ -339,14 +368,49 @@ namespace DpPatches.FumenDownloader.Kernel
             {
                 try
                 {
-                    change.Exeuctue();
-                    PatchLog.WriteLine($"execute IFileChangeItem #{change.Id} successfully.");
+                    var result = change.Exeuctue();
+                    PatchLog.WriteLine($"execute IFileChangeItem #{change.Id} {(result ? "successfully" : "failed")}.");
                 }
                 catch (Exception e)
                 {
                     PatchLog.WriteLine($"execute IFileChangeItem #{change.Id} throw exception: {e.Message}");
                 }
             }
+        }
+
+        public bool FilterMusicData(int key, MusicData musicData)
+        {
+            if (musicData == null)
+                return false;
+            var musicId = musicData.Name.id;
+
+            //如果是自制谱，那就检查自制谱是否是否为published状态，如果不是published状态，并且用户设置了只显示published谱面，那就过滤掉这个谱面
+            if (IsCustomFumen(musicId))
+            {
+                if (Setting.OnlyPublished && !IsCustomFumenPublishedCurrently(musicId))
+                {
+                    PatchLog.WriteLine($"FilterMusicData: filter musicId {key} because it's custom fumen and not published.");
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool IsCustomFumenPublishedCurrently(int musicId)
+        {
+            if (currentFumenSet.TryGetValue(musicId, out var fumenSet))
+                return fumenSet.publishState == 2;
+
+            if (localCacheMap.TryGetValue(musicId, out var cacheInfo))
+                return cacheInfo.fumenSet?.publishState == 2;
+
+            return false;
+        }
+
+        private bool IsCustomFumen(int musicId)
+        {
+            return localCacheMap.ContainsKey(musicId) || currentFumenSet.ContainsKey(musicId);
         }
     }
 }
