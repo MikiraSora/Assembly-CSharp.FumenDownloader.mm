@@ -64,27 +64,67 @@ namespace DpPatches.FumenDownloader
         {
             var request = HttpWebRequest.Create(url);
             request.Method = "GET";
+            string tempPath = null;
 
             try
             {
                 PatchLog.WriteLine($"SimpleHttp.DownloadFile() download file started {url} -> {savePath}");
-                var response = request.GetResponse() as HttpWebResponse;
+
+                using var webResponse = request.GetResponse();
+                var response = webResponse as HttpWebResponse;
+                if (response == null)
+                {
+                    PatchLog.WriteLine($"SimpleHttp.DownloadFile() non-http response {url}");
+                    return false;
+                }
 
                 if (response.StatusCode != HttpStatusCode.OK)
-                    PatchLog.WriteLine($"http request {url} return statusCode {response.StatusCode}");
-
-                var buffer = new byte[1024];
-
-                using var fs = File.OpenWrite(savePath);
-                using var ns = response.GetResponseStream();
-
-                while (true)
                 {
-                    var read = ns.Read(buffer, 0, buffer.Length);
-                    if (read <= 0)
-                        break;
-                    fs.Write(buffer, 0, read);
+                    PatchLog.WriteLine($"http request {url} return statusCode {response.StatusCode}");
+                    return false;
                 }
+
+                var folderPath = Path.GetDirectoryName(savePath);
+                if (!string.IsNullOrEmpty(folderPath))
+                    Directory.CreateDirectory(folderPath);
+
+                // Write to a sibling temp file first, then replace.
+                // File.OpenWrite/OpenOrCreate does not truncate, so a shorter
+                // payload would leave stale trailing bytes (broken Music.xml).
+                tempPath = savePath + ".tmp";
+                var buffer = new byte[1024];
+                var expectedLength = response.ContentLength;
+
+                using (var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (var ns = response.GetResponseStream())
+                {
+                    if (ns == null)
+                    {
+                        PatchLog.WriteLine($"SimpleHttp.DownloadFile() null response stream {url}");
+                        return false;
+                    }
+
+                    while (true)
+                    {
+                        var read = ns.Read(buffer, 0, buffer.Length);
+                        if (read <= 0)
+                            break;
+                        fs.Write(buffer, 0, read);
+                    }
+
+                    fs.Flush();
+
+                    if (expectedLength >= 0 && fs.Length != expectedLength)
+                    {
+                        PatchLog.WriteLine($"SimpleHttp.DownloadFile() length mismatch {url}: expected {expectedLength}, actual {fs.Length}");
+                        return false;
+                    }
+                }
+
+                if (File.Exists(savePath))
+                    File.Delete(savePath);
+                File.Move(tempPath, savePath);
+                tempPath = null;
 
                 return true;
             }
@@ -92,6 +132,21 @@ namespace DpPatches.FumenDownloader
             {
                 PatchLog.WriteLine($"SimpleHttp.DownloadFile() throw exception {url} : {e.Message}");
                 return false;
+            }
+            finally
+            {
+                if (tempPath != null)
+                {
+                    try
+                    {
+                        if (File.Exists(tempPath))
+                            File.Delete(tempPath);
+                    }
+                    catch
+                    {
+                        // best-effort cleanup
+                    }
+                }
             }
         }
 
