@@ -18,6 +18,7 @@ namespace DpPatches.FumenDownloader.Kernel
         private volatile bool isInitalizing = false;
         private Dictionary<int, CacheFumenInfo> localCacheMap = new();
         private Dictionary<int, FumenSet> currentFumenSet = new();
+        private readonly HashSet<int> _downloadedMusicIds = new HashSet<int>();
 
         public FumenDownloaderManager()
         {
@@ -49,6 +50,31 @@ namespace DpPatches.FumenDownloader.Kernel
         {
             while (!isInitalizing)
                 Thread.Sleep(100);
+        }
+
+        public void MarkDownloadedMusic(int musicId)
+        {
+            _downloadedMusicIds.Add(musicId);
+        }
+
+        public void ClearDownloadedMusic()
+        {
+            _downloadedMusicIds.Clear();
+        }
+
+        public bool IsDownloadedMusic(int musicId)
+        {
+            return _downloadedMusicIds.Contains(musicId);
+        }
+
+        public bool IsDownloadedPath(string path)
+        {
+            return Setting.IsUnderOptDirectory(path);
+        }
+
+        public bool IsEnableAddDownloadedMusicIntoRating()
+        {
+            return Setting.EnableAddDownloadedMusicIntoRating;
         }
 
         public void PrepareDownloadCacheData()

@@ -69,6 +69,19 @@ namespace DpPatches.FumenDownloader.Patches
 
             if (typeof(T) == typeof(MU3.DataStudio.MusicData))
             {
+                // 标记来源为 <DataFolder>/opt 的曲目，供 rating 过滤使用。
+                if (Setting.Enable)
+                {
+                    foreach (var kv in result)
+                    {
+                        if (IsDownloadedMusicData(kv.Value as MU3.DataStudio.MusicData))
+                        {
+                            Singleton<FumenDownloaderManager>.instance.MarkDownloadedMusic(kv.Key);
+                            PatchLog.WriteLine($"mark downloaded music id:{kv.Key}");
+                        }
+                    }
+                }
+
                 //filter once
                 var needRemoveIds = result.Where(kv => !Singleton<FumenDownloaderManager>.instance.FilterMusicData(kv.Key, kv.Value as MU3.DataStudio.MusicData)).Select(kv => kv.Key).ToList();
                 foreach (var id in needRemoveIds)
@@ -79,6 +92,21 @@ namespace DpPatches.FumenDownloader.Patches
             }
 
             return result;
+        }
+
+        private static bool IsDownloadedMusicData(MU3.DataStudio.MusicData musicData)
+        {
+            if (musicData?.FumenData == null)
+                return false;
+
+            foreach (var fumen in musicData.FumenData)
+            {
+                var path = fumen?.FumenFile?.path;
+                if (!string.IsNullOrEmpty(path) && Setting.IsUnderOptDirectory(path))
+                    return true;
+            }
+
+            return false;
         }
     }
 }

@@ -1,5 +1,4 @@
-﻿using MU3.Collab;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -10,24 +9,43 @@ namespace DpPatches.FumenDownloader
 {
     public static class PatchLog
     {
-        public const string FilePath = "dpFumenDownload.log";
-        private static object locker = new object();
+        private const string DefaultFilePath = @"D:\dpFumenDownload.log";
+        private static string filePath = DefaultFilePath;
+        private static readonly object locker = new object();
 
-        static PatchLog()
+        public static void SetFilePath(string path)
         {
-            try
+            if (string.IsNullOrEmpty(path))
+                return;
+
+            lock (locker)
             {
-                File.Delete(FilePath);
+                try
+                {
+                    filePath = path;
+                    var dir = Path.GetDirectoryName(filePath);
+                    if (!string.IsNullOrEmpty(dir))
+                        Directory.CreateDirectory(dir);
+                    File.Delete(filePath);
+                }
+                catch
+                {
+                }
             }
-            catch { }
         }
 
         public static void WriteLine(string msg)
         {
             lock (locker)
             {
-                int threadId = Thread.CurrentThread.ManagedThreadId;
-                File.AppendAllText(FilePath, $"{DateTime.Now:HH:mm:ss.ff}[{threadId}]{msg}{Environment.NewLine}");
+                try
+                {
+                    int threadId = Thread.CurrentThread.ManagedThreadId;
+                    File.AppendAllText(filePath, $"{DateTime.Now:HH:mm:ss.ff}[{threadId}]{msg}{Environment.NewLine}");
+                }
+                catch
+                {
+                }
             }
         }
     }
